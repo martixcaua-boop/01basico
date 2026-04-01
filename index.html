@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>FAP Analytics - Navy Professional</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+        :root {
+            --primary-navy: #1e3a8a;
+            --secondary-blue: #3b82f6;
+            --accent-blue: #60a5fa;
+            --bg-light: #f1f5f9;
+        }
+ 
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg-light); margin: 0; display: flex; height: 100vh; color: #1e293b; }
+        .sidebar { width: 320px; background: var(--primary-navy); padding: 25px; display: flex; flex-direction: column; box-shadow: 4px 0 10px rgba(0,0,0,0.1); z-index: 10; color: white; }
+        .sidebar h2 { color: #fff; margin-top: 0; font-size: 22px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; }
+        .main { flex: 1; padding: 30px; overflow-y: auto; background: #f8fafc; }
+        .card-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 25px; }
+        .card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border-top: 5px solid var(--primary-navy); }
+        .card h3 { margin: 0; font-size: 11px; color: #64748b; text-transform: uppercase; }
+        .card p { margin: 10px 0 0; font-size: 30px; font-weight: 800; color: var(--primary-navy); }
+ 
+        .sheet-container { background: #fff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 25px; }
+        /* BARRA DE FILTROS EXPANDIDA */
+        .filter-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; align-items: center; background: #f8fafc; padding: 15px; border-radius: 8px; }
+        .filter-group { display: flex; flex-direction: column; gap: 5px; }
+        .filter-group label { font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; }
+        .search-box, .date-input { padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 13px; outline: none; }
+        .search-box:focus, .date-input:focus { border-color: var(--secondary-blue); }
+        .btn-filter { padding: 10px 15px; border-radius: 8px; border: 1px solid #e2e8f0; cursor: pointer; font-size: 12px; font-weight: 600; background: #fff; color: #64748b; align-self: flex-end; }
+        .btn-filter.active-all { background: var(--primary-navy); color: white; }
+        .btn-filter.active-ok { background: #dbeafe; color: #1e40af; }
+        .btn-filter.active-erro { background: #fee2e2; color: #dc2626; }
+ 
+        .table-wrapper { height: 350px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { background: #f1f5f9; padding: 12px; position: sticky; top: 0; text-align: left; color: #475569; z-index: 2; }
+        td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
+        .status-badge { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; }
+        .status-ok { background: #dbeafe; color: #1e40af; }
+        .status-erro { background: #fee2e2; color: #dc2626; }
+ 
+        textarea { flex: 1; width: 100%; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); border-radius: 10px; padding: 15px; margin: 15px 0; font-size: 12px; color: white; }
+        button.btn-primary { background: var(--secondary-blue); color: white; border: none; padding: 14px; border-radius: 8px; cursor: pointer; font-weight: 700; width: 100%; }
+        .charts-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px; }
+        .chart-card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .line-chart-container { height: 280px; margin-bottom: 25px; }
+</style>
+</head>
+<body>
+ 
+<div class="sidebar">
+<h2>📊 FAP Analytics</h2>
+<textarea id="entrada" placeholder="Cole novos dados aqui..."></textarea>
+<button class="btn-primary" onclick="processar()">ATUALIZAR DASHBOARD</button>
+<button onclick="limpar()" style="margin-top:20px; background:none; border:none; color:#cbd5e1; cursor:pointer; font-size:11px; text-decoration:underline;">Limpar Base</button>
+</div>
+ 
+<div class="main">
+<div class="card-row">
+<div class="card"><h3>Total Base</h3><p id="tTotal">0</p></div>
+<div class="card" style="border-top-color:var(--accent-blue);"><h3>No Prazo</h3><p id="tNoPrazo" style="color:var(--secondary-blue);">0</p></div>
+<div class="card" style="border-top-color:#ef4444;"><h3>Fora Prazo</h3><p id="tForaPrazo" style="color:#dc2626;">0</p></div>
+<div class="card"><h3>Eficiência</h3><p id="tEfic">0%</p></div>
+</div>
+ 
+    <div class="chart-card line-chart-container">
+<h3 style="margin-top:0; font-size:14px; color:#475569;">📈 Evolução Diária de Protocolos</h3>
+<canvas id="graficoLinha"></canvas>
+</div>
+ 
+    <div class="sheet-container">
+<div class="filter-bar">
+<div class="filter-group" style="flex: 2;">
+<label>Busca Geral</label>
+<input type="text" id="inputBusca" class="search-box" placeholder="FAP ou Atendente..." onkeyup="renderizar()">
+</div>
+<div class="filter-group">
+<label>Data Criação</label>
+<input type="date" id="filtroCriacao" class="date-input" onchange="renderizar()">
+</div>
+<div class="filter-group">
+<label>Data Conclusão</label>
+<input type="date" id="filtroConclusao" class="date-input" onchange="renderizar()">
+</div>
+<div class="filter-group">
+<label>Status</label>
+<div style="display:flex; gap:5px;">
+<button class="btn-filter active-all" id="btnAll" onclick="setFiltroStatus('TODOS')">Todos</button>
+<button class="btn-filter" id="btnOk" onclick="setFiltroStatus('NO PRAZO')">OK</button>
+<button class="btn-filter" id="btnErro" onclick="setFiltroStatus('FORA DO PRAZO')">Erro</button>
+</div>
+</div>
+</div>
+ 
+        <div class="table-wrapper">
+<table>
+<thead>
+<tr><th>FAP</th><th>ATENDENTE</th><th>CRIAÇÃO</th><th>LIMITE</th><th>CONCLUÍDO</th><th>STATUS</th><th>DIAS</th></tr>
+</thead>
+<tbody id="corpoTabela"></tbody>
+</table>
+</div>
+</div>
+ 
+    <div class="charts-grid">
+<div class="chart-card" style="height: 350px;"><canvas id="graficoBarra"></canvas></div>
+<div class="chart-card" style="height: 350px;"><canvas id="graficoPizza"></canvas></div>
+</div>
+</div>
+ 
+<script>
+    let gLinha, gPizza, gBarra;
+    let baseDados = JSON.parse(localStorage.getItem('fap_final_v17')) || [];
+    let filtroStatusAtual = 'TODOS';
+ 
+    function setFiltroStatus(s) {
+        filtroStatusAtual = s;
+        document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active-all', 'active-ok', 'active-erro'));
+        if(s==='TODOS') document.getElementById('btnAll').classList.add('active-all');
+        if(s==='NO PRAZO') document.getElementById('btnOk').classList.add('active-ok');
+        if(s==='FORA DO PRAZO') document.getElementById('btnErro').classList.add('active-erro');
+        renderizar();
+    }
+ 
+    // Converte DD/MM/AAAA para objeto Date para comparação
+    function strToDate(s) {
+        if(!s || s === "-") return null;
+        const [d, m, y] = s.split('/');
+        return new Date(y, m - 1, d);
+    }
+ 
+    function processar() {
+        const txt = document.getElementById('entrada').value;
+        if (!txt.includes('FAP')) return;
+        const blocos = txt.split(/(?=FAP)/);
+        const equipe = ['Claudia Marcia Pereira','Gabriel Esteves Medeiros','Antônio Pacheco de Melo Neto','Thiago Rodrigues Ferreira Pinho','Liliane Grazielle de Souza Moraes','Raquel Rodrigues de Alvarenga','Julia Aparecida de Oliveira Leite','Maria Clara Santana e Silva','Daniel Vitor Silva de Melo','Cauã Yuri Martins Costa'];
+        blocos.forEach(b => {
+            const fapM = b.match(/FAP\d+/);
+            if (fapM && !baseDados.find(i => i.fap === fapM[0])) {
+                const d = b.match(/(\d{2}\/\d{2}\/\d{4})/g) || ["-", "-", "-"];
+                const s = b.toUpperCase().includes("NO PRAZO") ? "NO PRAZO" : "FORA DO PRAZO";
+                const dias = b.match(/(?:PRAZO)\s+(\d+)/i)?.[1] || 0;
+                let atend = "OUTROS";
+                equipe.forEach(n => { if(b.includes(n)) atend = n; });
+                baseDados.push({ fap: fapM[0], atend: atend, dataCriacao: d[0], dataConclusao: d[1], dataLimite: d[2], status: s, dias: parseInt(dias) });
+            }
+        });
+        localStorage.setItem('fap_final_v17', JSON.stringify(baseDados));
+        document.getElementById('entrada').value = "";
+        renderizar();
+    }
+ 
+    function renderizar() {
+        const busca = document.getElementById("inputBusca").value.toUpperCase();
+        const fCriacao = document.getElementById("filtroCriacao").value; // YYYY-MM-DD
+        const fConclusao = document.getElementById("filtroConclusao").value;
+ 
+        // FILTRAGEM DOS DADOS
+        const dadosFiltrados = baseDados.filter(item => {
+            const bateStatus = (filtroStatusAtual === 'TODOS' || item.status === filtroStatusAtual);
+            const bateBusca = item.fap.includes(busca) || item.atend.toUpperCase().includes(busca);
+            // Lógica de Data
+            let bateCriacao = true;
+            if(fCriacao) {
+                const dt = strToDate(item.dataCriacao);
+                bateCriacao = dt && dt.toISOString().split('T')[0] === fCriacao;
+            }
+            let bateConclusao = true;
+            if(fConclusao) {
+                const dt = strToDate(item.dataConclusao);
+                bateConclusao = dt && dt.toISOString().split('T')[0] === fConclusao;
+            }
+ 
+            return bateStatus && bateBusca && bateCriacao && bateConclusao;
+        });
+ 
+        // ATUALIZAR INTERFACE
+        let ok = 0, erro = 0, timeline = {}, ranking = {};
+        let htmlRows = "";
+ 
+        dadosFiltrados.forEach(item => {
+            item.status === "NO PRAZO" ? ok++ : erro++;
+            timeline[item.dataCriacao] = (timeline[item.dataCriacao] || 0) + 1;
+            if (!ranking[item.atend]) ranking[item.atend] = { ok: 0, erro: 0 };
+            item.status === "NO PRAZO" ? ranking[item.atend].ok++ : ranking[item.atend].erro++;
+            const css = item.status === "NO PRAZO" ? "status-ok" : "status-erro";
+            htmlRows += `<tr><td><b>${item.fap}</b></td><td>${item.atend}</td><td>${item.dataCriacao}</td><td>${item.dataLimite}</td><td>${item.dataConclusao}</td><td><span class="status-badge ${css}">${item.status}</span></td><td>${item.dias}d</td></tr>`;
+        });
+ 
+        document.getElementById('corpoTabela').innerHTML = htmlRows;
+        document.getElementById('tTotal').innerText = dadosFiltrados.length;
+        document.getElementById('tNoPrazo').innerText = ok;
+        document.getElementById('tForaPrazo').innerText = erro;
+        document.getElementById('tEfic').innerText = dadosFiltrados.length ? ((ok/dadosFiltrados.length)*100).toFixed(1) + "%" : "0%";
+ d
+        desenharGraficos(timeline, ranking, ok, erro);
+    }
+ 
+    function desenharGraficos(timeline, ranking, ok, erro) {
+        const labelsDatas = Object.keys(timeline).sort((a,b) => strToDate(a) - strToDate(b));
+        const labelsAtend = Object.keys(ranking).sort((a,b) => (ranking[b].ok + ranking[b].erro) - (ranking[a].ok + ranking[a].erro));
+ 
+        if (gLinha) gLinha.destroy();
+        if (gPizza) gPizza.destroy();
+        if (gBarra) gBarra.destroy();
+ 
+        gLinha = new Chart(document.getElementById('graficoLinha'), {
+            type: 'line',
+            data: { labels: labelsDatas, datasets: [{ label: 'Protocolos', data: labelsDatas.map(l=>timeline[l]), borderColor: '#1e3a8a', backgroundColor: 'rgba(30, 58, 138, 0.1)', fill: true }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+ 
+        gBarra = new Chart(document.getElementById('graficoBarra'), {
+            type: 'bar',
+            data: {
+                labels: labelsAtend,
+                datasets: [
+                    { label: 'No Prazo', data: labelsAtend.map(a => ranking[a].ok), backgroundColor: '#3b82f6' },
+                    { label: 'Atrasados', data: labelsAtend.map(a => ranking[a].erro), backgroundColor: '#ef4444' }
+                ]
+            },
+            options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
+        });
+ 
+        gPizza = new Chart(document.getElementById('graficoPizza'), {
+            type: 'pie',
+            data: { labels: ['No Prazo', 'Fora do Prazo'], datasets: [{ data: [ok, erro], backgroundColor: ['#3b82f6', '#ef4444'] }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+ 
+    function limpar() { if(confirm("Limpar base?")) { localStorage.clear(); location.reload(); } }
+    window.onload = renderizar;
+</script>
+</body>
+</html>
